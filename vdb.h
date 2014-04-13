@@ -130,7 +130,7 @@ typedef struct {
  * @param db Database struct
  * @param dbi Database iterator to initialize
  */
-extern void CDB_Iterator_init(VDB *db, VDB_Iterator *dbi);
+extern void VDB_Iterator_init(VDB *db, VDB_Iterator *dbi);
 
 /**
  * Get the next entry
