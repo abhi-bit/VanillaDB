@@ -76,6 +76,7 @@ typedef struct {
  * @param hash_table_size Size of the hash table in 64-bit entries
  * @param key_size Size of keys in bytes
  * @param value_size Size of values in bytes
+ * 
  * @return 0 on success, nonzero on error
  */
 extern int VDB_open(
@@ -99,6 +100,7 @@ extern void VDB_close(VDB *db);
  * @param db Database struct
  * @param key Key (key_size bytes)
  * @param vbuf Value buffer (value_size bytes capacity)
+ * 
  * @return -1 on I/O error, 0 on success, 1 on not found
  */
 extern int VDB_get(VDB *db, const void *key, void *buf);
@@ -111,7 +113,8 @@ extern int VDB_get(VDB *db, const void *key, void *buf);
  * @param db Database struct
  * @param key Key (key_size bytes)
  * @param value Value(value_size bytes)
- * @return -1 on I/o error, 0 on success
+ * 
+ * @return -1 on I/O error, 0 on success
  */
 extern int VDB_put(VDB *db, const void *key, const void *value);
 
@@ -141,6 +144,7 @@ extern void VDB_Iterator_init(VDB *db, VDB_Iterator *dbi);
  * @param dbi Database iterator
  * @param kbuf Buffer to fill with next key (key_size bytes)
  * @param vbuf Buffer to fill with next value (value_size bytes)
+ * 
  * @return 0 if there are no more entries, negative on error, positive if kbuf/vbuf have been filled
  */
 extern int VDB_Iterator_next(VDB_Iterator *dbi, void *kbuf, void *vbuf);

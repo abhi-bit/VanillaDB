@@ -36,13 +36,13 @@ int VDB_open(
         unsigned long value_size) {
 
     uint64_t tmp;
-    uint8_t tmp2[4];
+    uint8_t magic[4];
     uint64_t *httmp;
-    uint64_t *hash_table_rea;
+    uint64_t *hash_table_realloc;
 
 #ifdef _WIN32
-    dd->f = (FILE *)0;
-    fopen_s(&db->f, path, ((mode == CDB_OPEN_MODE_RWREPLACE) ? "w+b" : (((mode == VDB_OPEN_MODE_RDWR) || (mode == VDB_OPEN_MODE_RWCREAT)) ? "r+b" : "rb")));
+    db->f = (FILE *)0;
+    fopen_s(&db->f, path, ((mode == VDB_OPEN_MODE_RWREPLACE) ? "w+b" : (((mode == VDB_OPEN_MODE_RDWR) || (mode == VDB_OPEN_MODE_RWCREAT)) ? "r+b" : "rb")));
 #else
     db->f = fopen(path, ((mode == VDB_OPEN_MODE_RWREPLACE) ? "w+b" : (((mode == VDB_OPEN_MODE_RDWR) || (mode == VDB_OPEN_MODE_RWCREAT)) ? "r+b" : "rb")));
 #endif
@@ -74,12 +74,12 @@ int VDB_open(
                 return VDB_ERROR_IO;
             }
 
-            tmp2[0] = 'V';
-            tmp2[1] = 'd';
-            tmp2[2] = 'B';
-            tmp2[3] = VDB_VERSION;
+            magic[0] = 'V';
+            magic[1] = 'd';
+            magic[2] = 'B';
+            magic[3] = VDB_VERSION;
 
-            if (fwrite(tmp2, 4, 1, db->f) != 1) {
+            if (fwrite(magic, sizeof(char), sizeof(magic), db->f) != sizeof(magic)) {
                 fclose(db->f);
                 return VDB_ERROR_IO;
             }
@@ -108,17 +108,18 @@ int VDB_open(
             return VDB_ERROR_INVALID_PARAMETERS;
         }
     } else {
+
         if (fseeko(db->f, 0, SEEK_SET)) {
             fclose(db->f);
             return VDB_ERROR_IO;
         }
 
-        if (fread(tmp2, 4, 1, db->f) != 1) {
+        if (fread(magic, sizeof(char), sizeof(magic), db->f) != sizeof(magic)) {
             fclose(db->f);
             return VDB_ERROR_IO;
         }
 
-        if ((tmp2[0] != 'V') || (tmp2[1] != 'd') || (tmp2[2] != 'B') || (tmp2[3] != VDB_VERSION)) {
+        if ((magic[0] != 'V') || (magic[1] != 'd') || (magic[2] != 'B') || (magic[3] != VDB_VERSION)) {
             fclose(db->f);
             return VDB_ERROR_CORRUPT_DBFILE;
         }
@@ -127,8 +128,8 @@ int VDB_open(
             fclose(db->f);
             return VDB_ERROR_CORRUPT_DBFILE;
         }
-
         hash_table_size = (unsigned long)tmp;
+ 
         if (fread(&tmp, sizeof(uint64_t), 1, db->f) != 1) {
             fclose(db->f);
             return VDB_ERROR_IO;
@@ -138,13 +139,14 @@ int VDB_open(
             fclose(db->f);
             return VDB_ERROR_CORRUPT_DBFILE;
         }
-
         key_size = (unsigned long)tmp;
+
         if (fread(&tmp, sizeof(uint64_t), 1, db->f) != 1) {
             fclose(db->f);
             return VDB_ERROR_CORRUPT_DBFILE;
         }
         value_size = (unsigned long)tmp;
+ 
     }
 
     db->hash_table_size = hash_table_size;
@@ -161,24 +163,19 @@ int VDB_open(
     db->num_hash_tables = 0;
     db->hash_tables = (uint64_t *)0;
 
+    /* creating space for a hash_table */
     while (fread(httmp, db->hash_table_size_bytes, 1, db->f) == 1) {
-        hash_table_rea = realloc(db->hash_tables, db->hash_table_size_bytes * (db->num_hash_tables + 1));
-        if (!hash_table_rea) {
+        hash_table_realloc = realloc(db->hash_tables, db->hash_table_size_bytes * (db->num_hash_tables + 1));
+        if (!hash_table_realloc) {
             VDB_close(db);
             free(httmp);
             return VDB_ERROR_MALLOC;
         }
-        db->hash_tables = hash_table_rea;
+        db->hash_tables = hash_table_realloc;
 
         memcpy(((uint8_t *)db->hash_tables) + (db->hash_table_size_bytes * db->num_hash_tables), httmp, db->hash_table_size_bytes);
         ++db->num_hash_tables;
 
-        if (httmp[db->hash_table_size]) {
-            if (fseeko(db->f, httmp[db->hash_table_size], SEEK_SET)) {
-                VDB_close(db);
-                return VDB_ERROR_IO;
-            }
-        } else break;
     }
 
     free(httmp);
@@ -217,7 +214,7 @@ int VDB_get(VDB *db, const void *key, void *vbuf) {
 
             while (klen) {
                 n = (long)fread(tmp, 1, (klen > sizeof(tmp)) ? sizeof(tmp) : klen, db->f);
-
+ 
                 if (n > 0) {
                     if (memcmp(kptr, tmp, n))
                         goto get_no_match_next_hash_table;
@@ -273,26 +270,26 @@ int VDB_put(VDB *db, const void *key, const void *value) {
                 }
             }
 
-            if (fwrite(value,db->value_size,1,db->f) == 1) {
+            if (fwrite(value, db->value_size, 1, db->f) == 1) {
                 fflush(db->f);
                 return 0; /* success */
             } else return VDB_ERROR_IO;
         } else {
             /* add if an empty hash table slot is discovered */
-            if (fseeko(db->f,0,SEEK_END))
+            if (fseeko(db->f, 0, SEEK_END))
                 return VDB_ERROR_IO;
             endoffset = ftello(db->f);
 
-            if (fwrite(key,db->key_size,1,db->f) != 1)
+            if (fwrite(key, db->key_size, 1, db->f) != 1)
                 return VDB_ERROR_IO;
             
-            if (fwrite(value,db->value_size,1,db->f) != 1)
+            if (fwrite(value, db->value_size, 1, db->f) != 1)
                 return VDB_ERROR_IO;
 
-            if (fseeko(db->f,htoffset + (sizeof(uint64_t) * hash),SEEK_SET))
+            if (fseeko(db->f, htoffset + (sizeof(uint64_t) * hash), SEEK_SET))
                 return VDB_ERROR_IO;
 
-            if (fwrite(&endoffset,sizeof(uint64_t),1,db->f) != 1)
+            if (fwrite(&endoffset, sizeof(uint64_t), 1, db->f) != 1)
                 return VDB_ERROR_IO;
             cur_hash_table[hash] = endoffset;
 
@@ -360,7 +357,7 @@ int VDB_Iterator_next(VDB_Iterator *dbi, void *kbuf, void *vbuf) {
 
     uint64_t offset;
 
-    if ((dbi->h_no < dbi->db->num_hash_tables)&&(dbi->h_idx < dbi->db->hash_table_size)) {
+    if ((dbi->h_no < dbi->db->num_hash_tables) && (dbi->h_idx < dbi->db->hash_table_size)) {
         while (!(offset = dbi->db->hash_tables[((dbi->db->hash_table_size + 1) * dbi->h_no) + dbi->h_idx])) {
             if (++dbi->h_idx >= dbi->db->hash_table_size) {
                 dbi->h_idx = 0;
@@ -369,13 +366,13 @@ int VDB_Iterator_next(VDB_Iterator *dbi, void *kbuf, void *vbuf) {
             }
         }
 
-        if (fseeko(dbi->db->f,offset,SEEK_SET))
+        if (fseeko(dbi->db->f, offset, SEEK_SET))
             return VDB_ERROR_IO;
         
-        if (fread(kbuf,dbi->db->key_size,1,dbi->db->f) != 1)
+        if (fread(kbuf, dbi->db->key_size, 1, dbi->db->f) != 1)
             return VDB_ERROR_IO;
         
-        if (fread(vbuf,dbi->db->value_size,1,dbi->db->f) != 1)
+        if (fread(vbuf, dbi->db->value_size, 1, dbi->db->f) != 1)
             return VDB_ERROR_IO;
         
         if (++dbi->h_idx >= dbi->db->hash_table_size) {
